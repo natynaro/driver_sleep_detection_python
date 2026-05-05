@@ -1,11 +1,12 @@
 import sys
+import math
+import psutil
 import time
 import cv2
 import numpy as np
 
-
 from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QImage, QPixmap, QColor
+from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
     QLabel,
@@ -20,6 +21,11 @@ from PyQt5.QtWidgets import (
 from src.camera.webcam import Webcam
 from src.detection.face_mesh_detector import FaceMeshDetector
 
+# Mobile simulation settings
+MOBILE_SIMULATION = True
+MOBILE_RESOLUTION = (320, 240)
+SKIP_FRAMES = 2
+ARTIFICIAL_DELAY = 0.02
 
 SLEEP_THRESHOLD = 0.20
 SLEEP_FRAMES_REQUIRED = 15
@@ -34,7 +40,8 @@ class DriverSleepApp(QWidget):
         self.resize(900, 700)
 
         # Core
-        self.cam = Webcam(width=640, height=480)
+        width, height = MOBILE_RESOLUTION if MOBILE_SIMULATION else (640, 480)
+        self.cam = Webcam(width=width, height=height)
         self.detector = FaceMeshDetector()
 
         self.consecutive_sleep_frames = 0
@@ -43,6 +50,11 @@ class DriverSleepApp(QWidget):
         self.blink_count = 0
         self.blink_start = None
         self.blink_durations = []
+
+        # Mobile simulation state
+        self.frame_idx = 0
+        self.prev_ear = None
+        self.prev_face = None
 
         # UI
         self._build_ui()
@@ -59,6 +71,7 @@ class DriverSleepApp(QWidget):
         self.video_label = QLabel()
         self.video_label.setFrameShape(QFrame.Box)
         self.video_label.setAlignment(Qt.AlignCenter)
+        self.video_label.setMinimumSize(800, 450)
         main_layout.addWidget(self.video_label, stretch=3)
 
         # Stats
@@ -74,6 +87,9 @@ class DriverSleepApp(QWidget):
         self.last_blink_label = QLabel("Last Blink: -")
         self.yawn_label = QLabel("Yawn: No")
         self.head_tilt_label = QLabel("Head Tilt: No")
+        self.cpu_label = QLabel("CPU: -")
+        self.hr_label = QLabel("HR: -")
+        self.mobile_label = QLabel("Mobile Mode: Yes" if MOBILE_SIMULATION else "Mobile Mode: No")
 
         for lbl in [
             self.ear_label,
@@ -82,6 +98,9 @@ class DriverSleepApp(QWidget):
             self.last_blink_label,
             self.yawn_label,
             self.head_tilt_label,
+            self.cpu_label,
+            self.hr_label,
+            self.mobile_label,
         ]:
             lbl.setStyleSheet("font-size: 14px;")
             stats_layout.addWidget(lbl)
@@ -130,13 +149,22 @@ class DriverSleepApp(QWidget):
         if not ret:
             return
 
+        self.frame_idx += 1
+
         # FPS
         now = time.time()
         fps = 1 / (now - self.prev_time)
         self.prev_time = now
 
-        # Detección
-        frame, ear, face = self.detector.detect(frame)
+        # Detección - Mobile simulation frame skipping
+        if MOBILE_SIMULATION and self.frame_idx % SKIP_FRAMES != 0:
+            ear = self.prev_ear
+            face = self.prev_face
+        else:
+            frame, ear, face = self.detector.detect(frame)
+            self.prev_ear = ear
+            self.prev_face = face
+            time.sleep(ARTIFICIAL_DELAY)
 
         h, w, _ = frame.shape
 
@@ -187,6 +215,13 @@ class DriverSleepApp(QWidget):
         self.yawn_label.setText(f"Yawn: {'Yes' if yawn else 'No'}")
         self.head_tilt_label.setText(f"Head Tilt: {'Yes' if head_tilt else 'No'}")
 
+        # Mobile simulation stats
+        cpu_usage = psutil.cpu_percent(interval=None)
+        heart_rate = 70 + int(5 * math.sin(time.time() / 3.0))
+        self.cpu_label.setText(f"CPU: {cpu_usage:.0f}%")
+        self.hr_label.setText(f"HR: {heart_rate} bpm")
+        self.mobile_label.setText("Mobile Mode: Yes" if MOBILE_SIMULATION else "Mobile Mode: No")
+
         # Status + color
         if asleep:
             self.status_label.setText("Status: SLEEP DETECTED")
@@ -199,13 +234,20 @@ class DriverSleepApp(QWidget):
                 "font-size: 18px; font-weight: bold; color: green;"
             )
 
-        # Mostrar frame en QLabel
+        # Mostrar frame en QLabel (reescala para UI, no para procesamiento)
+        frame = cv2.resize(frame, (800, 450), interpolation=cv2.INTER_LINEAR)
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb.shape
         bytes_per_line = ch * w
         qimg = QImage(rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
         pix = QPixmap.fromImage(qimg)
-        self.video_label.setPixmap(pix)
+        self.video_label.setPixmap(
+            pix.scaled(
+                self.video_label.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+        )
 
     def closeEvent(self, event):
         self.cam.release()

@@ -3,3 +3,5 @@ mediapipe
 numpy
 PyQt5
 psutil
+pandas
+pandas

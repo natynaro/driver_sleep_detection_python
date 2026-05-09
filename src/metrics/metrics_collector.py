@@ -100,6 +100,10 @@ class MetricsCollector:
         # Track first detections for delay calculation
         if wearable_drowsy and not self.wearable_drowsy_timestamps:
             self.wearable_drowsy_timestamps.append(current_time)
+            print(
+                f"[WEARABLE EVENT] DROWSY detected at t = {current_time:.2f}s "
+                f"(level > 0.6 from Excel)"
+            )
         if visual_drowsy and not self.visual_drowsy_timestamps:
             self.visual_drowsy_timestamps.append(current_time)
         if fused_state == FusedDriverState.DROWSY and not self.fused_drowsy_timestamps:

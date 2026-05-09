@@ -1,289 +1,685 @@
 # Driver Sleep Detection – Python, MediaPipe & PyQt5 (Evaluable System)
 
-This project implements an **evaluable and comparable real-time driver drowsiness detection system** using physiologically meaningful rules. It compares **Visual-only** vs. **Visual + Wearable** models through quantitative metrics, designed for academic evaluation and safety analysis.
+This project implements an **evaluable and comparable real-time driver drowsiness detection system** using physiologically meaningful rules and multimodal evaluation. The system supports both:
 
-## 🚀 Key Features
+* **Visual-only mode**
+* **Visual + Wearable fusion mode**
 
-- **Physiologically Realistic Detection**: Based on EAR (Eye Aspect Ratio), microsleep, yawning, and head tilt – no arbitrary scoring.
-- **Model Comparison**: Evaluates Visual-only vs. Visual+Wearable fusion with metrics for quality, resources, and temporal evolution.
-- **Conservative Fusion Logic**: Prioritizes safety; SLEEPY visual forces SLEEPY fused to avoid false negatives.
-- **Real-time Metrics**: CPU usage, detection delays, coincidences, energy estimates.
-- **In-window Alert**: Color-coded warning button for DROWSY and MICROSLEEP states.
-- **Data Export**: Automatic CSV logging for post-analysis and reporting.
-- **PyQt5 GUI**: Enhanced interface showing all models and metrics in real-time.
+The application measures not only drowsiness states, but also **detection quality, computational cost, temporal evolution, and experimental configuration impact**.
 
 ---
 
-## 📁 Project Structure
+# 🚀 Key Features
 
-```
+* **Physiologically Realistic Detection**
+
+  * EAR (Eye Aspect Ratio)
+  * Microsleep detection
+  * Yawning analysis
+  * Head tilt analysis
+
+* **Two Experimental Modes**
+
+  * `VISUAL_ONLY`
+  * `FUSED`
+
+* **Conservative Fusion Logic**
+
+  * Prevents false negatives in safety-critical situations
+  * Visual microsleep always dominates fusion state
+
+* **Real-Time Metrics**
+
+  * CPU usage
+  * Detection delay
+  * Coincidence percentage
+  * Energy estimation
+
+* **Temporal Event Timeline**
+
+  * Real-time logging of state transitions
+
+* **Automatic CSV Export**
+
+  * Session metrics exported for academic analysis
+
+* **PyQt5 GUI**
+
+  * Live video feed
+  * State visualization
+  * Alert system
+  * Metrics dashboard
+
+* **Experimental Camera Configuration**
+
+  * Resolution comparison
+  * FPS comparison
+  * Performance evaluation
+
+---
+
+# 📁 Project Structure
+
+```text
 driver_sleep_detection_python/
-├── README.md                              # Project documentation
-├── requirements.txt                       # Python dependencies
+├── README.md
+├── requirements.txt
 ├── models/
-│   └── face_landmarker.task              # MediaPipe Face Landmarker model
+│   └── face_landmarker.task
 ├── data/
-│   ├── wearable_ble_stream.xlsx          # Simulated wearable BLE data (Excel)
-│   └── session_logs.csv                  # Auto-exported metrics (generated)
+│   ├── wearable_ble_stream.xlsx
+│   └── session_logs.csv
 └── src/
     ├── __init__.py
     ├── camera/
     │   ├── __init__.py
-    │   ├── webcam.py                      # Webcam capture wrapper
-    │   └── resolution_test.py             # Camera resolution testing utility
+    │   ├── webcam.py
+    │   └── resolution_test.py
     ├── detection/
     │   ├── __init__.py
-    │   ├── eye_aspect_ratio.py            # EAR calculation module
-    │   └── face_mesh_detector.py          # MediaPipe face detection wrapper
+    │   ├── eye_aspect_ratio.py
+    │   └── face_mesh_detector.py
     ├── gui/
     │   ├── __init__.py
-    │   └── qt_app.py                      # Main PyQt5 application with evaluation
+    │   └── qt_app.py
     └── metrics/
         ├── __init__.py
-        └── metrics_collector.py            # Metrics collection and export module
+        └── metrics_collector.py
 ```
 
 ---
 
-## 🛠️ Installation & Setup
+# 🛠️ Installation & Setup
 
-### Prerequisites
-- Python 3.10 or higher
-- Webcam connected
-- Excel file: `data/wearable_ble_stream.xlsx` (simulated wearable data)
+## Prerequisites
 
-### Install Dependencies
+* Python 3.10+
+* Webcam
+* Excel wearable data file:
+
+  * `data/wearable_ble_stream.xlsx`
+
+---
+
+## Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-**Dependencies:**
-- `opencv-python` – Video capture and processing
-- `mediapipe` – Face landmark detection
-- `numpy` – Numerical computations
-- `PyQt5` – GUI framework
-- `pandas` – Excel reading and data export
+### Main Dependencies
 
-### Download the Face Landmarker Model
-
-Place the MediaPipe model in `models/face_landmarker.task`:
-1. Download from: https://storage.googleapis.com/mediapipe-tasks/python/latest/face_landmarker.task
-2. Place in: `models/face_landmarker.task`
+* `opencv-python`
+* `mediapipe`
+* `numpy`
+* `pandas`
+* `PyQt5`
+* `psutil`
+* `openpyxl`
 
 ---
 
-## 🎯 How It Works
+## Download MediaPipe Face Landmarker Model
 
-### Core Architecture
+Download:
 
-The system operates in four layers for evaluation:
-
-#### 1. **Face Detection & Landmark Extraction** (`detection/face_mesh_detector.py`)
-
-Uses MediaPipe FaceLandmarker to detect 468 facial landmarks:
-- **Key landmarks**:
-  - Eyes: 159,145,153,154,155,133 (left); 386,374,380,381,382,362 (right)
-  - Mouth: 13 (top), 14 (bottom) for yawn
-  - Head: 1 (nose), 152 (chin) for tilt
-
-#### 2. **Physiological Feature Calculation** (`detection/eye_aspect_ratio.py`)
-
-**Eye Aspect Ratio (EAR):**
-$$\text{EAR} = \frac{||p_2 - p_6|| + ||p_3 - p_5||}{2 \times ||p_1 - p_4||}$$
-
-**Yawn Ratio:** Normalized mouth opening vs. face height.
-
-**Head Tilt Angle:** Inclination from nose-chin vector.
-
-#### 3. **State Machines & Fusion** (`gui/qt_app.py`)
-
-**Visual Model States:**
-- **AWAKE**: Normal behavior
-- **DROWSY**: Yawn + head tilt in window, or sustained head tilt
-- **SLEEPY**: Microsleep (eyes closed > ~0.25s)
-
-**Wearable Model:**
-- **DROWSY** if `drowsiness_level > 0.6`
-- Data from Excel, interpolated temporally
-
-**Fusion Model (Conservative):**
-- If Visual == SLEEPY → Fused = SLEEPY
-- If Visual == DROWSY OR Wearable == DROWSY → Fused = DROWSY
-- Else → Fused = AWAKE
-
-#### 4. **Metrics Collection** (`metrics/metrics_collector.py`)
-
-**Quality Metrics:**
-- **Detection Delay**: Time from Wearable DROWSY to Visual/Fused DROWSY
-- **Coincidence %**: Frame-by-frame agreement between Visual and Wearable
-
-**Resource Metrics:**
-- **CPU %**: Average usage (psutil)
-- **Energy Estimate**: Cumulative CPU-seconds (logical units)
-
-**Temporal Evolution:**
-- Timeline of state changes
-- CSV export: timestamp, visual_state, wearable_drowsy, fused_state, cpu_percent, energy_estimate
-
----
-
-## ⚙️ Configuration Parameters
-
-### Detection Thresholds (Physiologically Based)
-
-```python
-# Camera & Processing
-MOBILE_RESOLUTION = (640, 480)
-FPS = 30.0
-DT = 1.0 / FPS
-
-# EAR (Eye Aspect Ratio)
-EYE_OPEN_THRESHOLD = 0.75      # Baseline for open eyes
-EYE_CLOSED_RATIO = 0.92        # Closed eye ratio vs. baseline
-MICROSLEEP_FRAMES = 8          # ~0.25s at 30 FPS
-
-# Facial Cues
-YAWN_RATIO_THRESHOLD = 0.12    # Normalized mouth opening
-HEAD_TILT_THRESHOLD = 0.15     # Head inclination angle
-
-# Temporal Logic (seconds)
-YAWN_TILT_WINDOW = 2.0         # Window for yawn + tilt → DROWSY
-HEAD_TILT_SUSTAINED = 2.0      # Sustained tilt → DROWSY
-AWAKE_RESET_TIME = 4.0         # Normal behavior → AWAKE
+```text
+https://storage.googleapis.com/mediapipe-tasks/python/latest/face_landmarker.task
 ```
 
-### Wearable Configuration
-- **DROWSY Threshold**: `drowsiness_level > 0.6`
-- **Packet Loss Handling**: Uses last valid value if `packet_lost == 1`
-- **Temporal Alignment**: `t_arrival_ms` converted to seconds, interpolated
+Place the file inside:
+
+```text
+models/face_landmarker.task
+```
 
 ---
 
-## 💻 Usage
+# 🎯 System Architecture
 
-### Main Application (Evaluable GUI)
+The system is divided into four main layers:
+
+---
+
+## 1. Face Detection & Landmark Extraction
+
+**File:** `detection/face_mesh_detector.py`
+
+Uses MediaPipe FaceLandmarker to detect facial landmarks in real time.
+
+### Main Landmarks Used
+
+| Feature   | Landmark IDs            |
+| --------- | ----------------------- |
+| Left Eye  | 159,145,153,154,155,133 |
+| Right Eye | 386,374,380,381,382,362 |
+| Mouth     | 13, 14                  |
+| Head Tilt | 1 (nose), 152 (chin)    |
+
+---
+
+## 2. Physiological Feature Extraction
+
+**File:** `detection/eye_aspect_ratio.py`
+
+### Eye Aspect Ratio (EAR)
+
+```math
+EAR = \frac{||p_2 - p_6|| + ||p_3 - p_5||}{2 \times ||p_1 - p_4||}
+```
+
+### Additional Features
+
+* Microsleep detection
+* Mouth opening ratio
+* Head inclination angle
+
+---
+
+## 3. Driver State Machine
+
+**File:** `gui/qt_app.py`
+
+### Driver States
+
+* `AWAKE`
+* `DROWSY`
+* `SLEEPY`
+
+### State Logic
+
+#### Rule 1 — Microsleep
+
+```text
+Eyes closed for ~0.25s → SLEEPY
+```
+
+#### Rule 2 — Yawn + Head Tilt
+
+```text
+Yawn + tilt within temporal window → DROWSY
+```
+
+#### Rule 3 — Sustained Head Tilt
+
+```text
+Sustained head tilt → DROWSY
+```
+
+#### Rule 4 — Recovery
+
+```text
+Stable normal behavior → AWAKE
+```
+
+---
+
+# 🔀 Experimental Modes
+
+The system now supports configurable experimental modes:
+
+```python
+EXPERIMENT_MODE = "VISUAL_ONLY"
+# Options:
+# "VISUAL_ONLY"
+# "FUSED"
+```
+
+---
+
+## VISUAL_ONLY Mode
+
+Uses only visual facial features:
+
+* EAR
+* Microsleep
+* Yawning
+* Head tilt
+
+No wearable data is processed.
+
+---
+
+## FUSED Mode
+
+Combines:
+
+* Visual model
+* Wearable drowsiness stream
+
+### Wearable Logic
+
+```python
+wearable_drowsy = wearable_level > 0.6
+```
+
+### Packet Loss Handling
+
+If:
+
+```python
+packet_lost == 1
+```
+
+The system reuses the last valid wearable value.
+
+### Temporal Alignment
+
+Wearable timestamps are interpolated:
+
+```python
+np.interp(...)
+```
+
+---
+
+# 🧠 Conservative Fusion Logic
+
+The fusion system prioritizes safety:
+
+```python
+if visual_state == SLEEPY:
+    fused = SLEEPY
+
+elif visual_state == DROWSY or wearable_drowsy:
+    fused = DROWSY
+
+else:
+    fused = AWAKE
+```
+
+This minimizes dangerous false negatives.
+
+---
+
+# 📊 Metrics Collection System
+
+**File:** `metrics/metrics_collector.py`
+
+The system includes a complete evaluation framework.
+
+---
+
+## Quality Metrics
+
+### Detection Delay
+
+Measures time between:
+
+```text
+Wearable DROWSY
+→
+Visual/Fused detection
+```
+
+---
+
+### Coincidence Percentage
+
+Frame-by-frame agreement between:
+
+* Visual model
+* Wearable model
+
+---
+
+## Resource Metrics
+
+### CPU Usage
+
+Measured using:
+
+```python
+psutil.cpu_percent()
+```
+
+---
+
+### Energy Estimation
+
+Simple cumulative CPU-based estimate:
+
+```python
+energy += cpu_percent / 100
+```
+
+---
+
+## Temporal Evolution
+
+Tracks:
+
+* Visual state
+* Wearable state
+* Fused state
+* CPU usage
+* Energy estimation
+
+---
+
+# ⚙️ Configuration Parameters
+
+## Camera Configuration
+
+```python
+CAMERA_RESOLUTION = (640, 480)
+FPS = 30.0
+DT = 1.0 / FPS
+```
+
+Alternative experiments:
+
+```python
+(320, 240)
+FPS = 20.0
+```
+
+---
+
+## EAR Configuration
+
+```python
+EYE_OPEN_THRESHOLD = 0.75
+EYE_CLOSED_RATIO = 0.92
+MICROSLEEP_FRAMES = 8
+```
+
+---
+
+## Facial Cue Thresholds
+
+```python
+YAWN_RATIO_THRESHOLD = 0.12
+HEAD_TILT_THRESHOLD = 0.15
+```
+
+---
+
+## Temporal Logic
+
+```python
+YAWN_TILT_WINDOW = 2.0
+HEAD_TILT_SUSTAINED = 2.0
+AWAKE_RESET_TIME = 4.0
+```
+
+---
+
+# 💻 Usage
+
+## Run the Main Application
 
 ```bash
 python -m src.gui.qt_app
 ```
 
-**Real-time Display:**
-- **Video Feed**: Live camera with facial overlays
-- **States**:
-  - Visual Model: AWAKE/DROWSY/SLEEPY
-  - Wearable: AWAKE/DROWSY (with level)
-  - Fused Model: AWAKE/DROWSY/SLEEPY (blue text)
-- **Alert Button**: In-window warning button that turns orange for DROWSY and red for MICROSLEEP
-- **Metrics**:
-  - EAR: Current eye aspect ratio
-  - Yawn: Yes/No
-  - Head Tilt: Yes/No
-  - Microsleep: Yes/No
-  - CPU: Average %
-  - Delay: Detection delay (s)
-  - Coinc: Agreement % with wearable
-- **Timeline**: Recent events (e.g., "Wearable DROWSY at 10.5s")
+---
 
-**Interaction:**
-- Close eyes >0.25s → Microsleep → SLEEPY
-- Yawn + tilt head → DROWSY
-- Sustained head tilt → DROWSY
-- Normal behavior → AWAKE after 4s
+# 🖥️ Real-Time GUI Features
 
-**Export**: Closes automatically saves `data/session_logs.csv`
+## Live Video Feed
 
-### Analysis Script (Post-Evaluation)
+Displays:
 
-```python
-import pandas as pd
-import matplotlib.pyplot as plt
+* Face landmarks
+* Driver monitoring overlay
 
-# Load exported data
-df = pd.read_csv('data/session_logs.csv')
+---
 
-# Calculate final metrics
-delay_visual = df[df['wearable_drowsy']].index[0] - df[df['visual_state'] == 'DROWSY'].index[0] if any(df['visual_state'] == 'DROWSY') else None
-coincidence = (df['visual_state'].isin(['DROWSY', 'SLEEPY']) == df['wearable_drowsy']).mean() * 100
-cpu_avg = df['cpu_percent'].mean()
-energy_total = df['energy_estimate'].iloc[-1]
+## Driver States
 
-# Plot evolution
-plt.figure(figsize=(12, 6))
-plt.subplot(2, 1, 1)
-plt.plot(df['timestamp'], df['cpu_percent'], label='CPU %')
-plt.plot(df['timestamp'], df['energy_estimate'], label='Energy Estimate')
-plt.legend()
-plt.title('Resource Metrics Over Time')
+### Visual Model
 
-plt.subplot(2, 1, 2)
-plt.plot(df['timestamp'], df['visual_state'].map({'AWAKE': 0, 'DROWSY': 1, 'SLEEPY': 2}), label='Visual')
-plt.plot(df['timestamp'], df['wearable_drowsy'].astype(int), label='Wearable')
-plt.plot(df['timestamp'], df['fused_state'].map({'AWAKE': 0, 'DROWSY': 1, 'SLEEPY': 2}), label='Fused')
-plt.legend()
-plt.title('State Evolution')
-plt.show()
+```text
+AWAKE / DROWSY / SLEEPY
+```
+
+### Wearable State
+
+```text
+AWAKE / DROWSY
+```
+
+### Fused Model
+
+```text
+AWAKE / DROWSY / SLEEPY
 ```
 
 ---
 
-## 📊 Evaluation Framework
+## Metrics Dashboard
 
-### Model Comparison
-- **Visual-only**: Uses facial cues only
-- **Visual+Wearable**: Fused model with Excel data
-- **Trade-offs**: Precision vs. computational cost
+Displays:
 
-### Key Metrics for Academic Reporting
-- **Safety (Delay)**: How quickly each model detects drowsiness
-- **Accuracy (Coincidence)**: Agreement between models
-- **Efficiency (CPU/Energy)**: Resource usage for mobile deployment
-- **Temporal Analysis**: Timeline shows when each model triggers
-
-### Justification
-- **Conservative Fusion**: Prevents false negatives in safety-critical system
-- **Physiological Basis**: Thresholds based on human sleep research, not ML scoring
-- **Evaluable Design**: Quantifiable metrics for thesis/defense
+* EAR
+* Yawn detection
+* Head tilt detection
+* Microsleep detection
+* CPU average
+* Detection delay
+* Coincidence percentage
 
 ---
 
-## 🔧 Troubleshooting
+## Timeline Viewer
 
-### Model Not Found
-- Ensure `face_landmarker.task` is in `models/`
+Shows recent events:
 
-### Excel Not Found
-- Place `wearable_ble_stream.xlsx` in `data/`
-
-### Low Performance
-- Reduce resolution in `MOBILE_RESOLUTION`
-- Close background apps
-
-### False Positives
-- Adjust thresholds: Increase `EYE_CLOSED_RATIO` or `MICROSLEEP_FRAMES`
-
-### Face Not Detected
-- Improve lighting, face camera directly
+```text
+10.5s: Visual=DROWSY, Wearable=DROWSY, Fused=DROWSY
+```
 
 ---
 
-## 📝 Academic References
+## Driver Warning System
 
-- MediaPipe: https://mediapipe.dev/
-- EAR Algorithm: Soukupová & Čech (2016)
-- Drowsiness Detection: Research on physiological markers
+### Normal
 
-**For Thesis/Report**: This system enables comparative analysis of multimodal drowsiness detection, justifying design choices with empirical metrics.
-- **PyQt5:** https://www.riverbankcomputing.com/software/pyqt/
+Green button:
+
+```text
+DRIVER STATUS: NORMAL
+```
+
+### Drowsy
+
+Orange warning:
+
+```text
+WARNING: DROWSY DRIVER
+```
+
+### Microsleep
+
+Red warning:
+
+```text
+WARNING: MICROSLEEP DETECTED
+```
 
 ---
 
-## 📌 Notes
+# 📁 CSV Export
 
-- This system is designed for **driver safety research and testing**
-- **Accuracy varies** based on lighting, camera quality, and user positioning
-- **Always use in combination with other safety systems**
-- Real deployment should include additional validation and calibration
+When the application closes:
+
+```python
+self.metrics.export_to_csv('data/session_logs.csv')
+```
+
+The exported CSV contains:
+
+| Column          | Description           |
+| --------------- | --------------------- |
+| timestamp       | Session time          |
+| visual_state    | Visual model state    |
+| wearable_drowsy | Wearable binary state |
+| fused_state     | Fused model state     |
+| cpu_percent     | CPU usage             |
+| energy_estimate | Cumulative energy     |
+
+---
+
+# 📈 Example Post-Analysis
+
+```python
+import pandas as pd
+
+df = pd.read_csv("data/session_logs.csv")
+
+print(df.head())
+print(df.describe())
+```
+
+Possible analyses:
+
+* CPU evolution
+* Detection latency
+* Coincidence comparison
+* Fusion performance
+* Resolution/FPS impact
+
+---
+
+# 🧪 Experimental Evaluation
+
+The system was designed for academic comparison experiments.
+
+---
+
+## Compared Configurations
+
+### Detection Modes
+
+* Visual-only
+* Visual + wearable fusion
+
+### Hardware Configurations
+
+* 640×480 @ 30 FPS
+* 320×240 @ 20 FPS
+
+---
+
+## Evaluation Goals
+
+### Safety
+
+How fast drowsiness is detected.
+
+### Accuracy
+
+Agreement between modalities.
+
+### Efficiency
+
+CPU and energy cost.
+
+### Temporal Behavior
+
+Evolution of driver states over time.
+
+---
+
+# 🔧 Troubleshooting
+
+## Model Not Found
+
+Ensure:
+
+```text
+models/face_landmarker.task
+```
+
+exists.
+
+---
+
+## Excel File Missing
+
+Place:
+
+```text
+data/wearable_ble_stream.xlsx
+```
+
+inside the data folder.
+
+---
+
+## High CPU Usage
+
+Try:
+
+* Lower resolution
+* Lower FPS
+* Close background applications
+
+---
+
+## False Positives
+
+Adjust:
+
+```python
+EYE_CLOSED_RATIO
+MICROSLEEP_FRAMES
+```
+
+---
+
+## Face Not Detected
+
+Improve:
+
+* Lighting
+* Camera angle
+* Face visibility
+
+---
+
+# 📝 Academic References
+
+## MediaPipe
+
+```text
+https://mediapipe.dev/
+```
+
+---
+
+## EAR Algorithm
+
+Soukupová & Čech (2016)
+
+---
+
+## PyQt5
+
+```text
+https://www.riverbankcomputing.com/software/pyqt/
+```
+
+---
+
+# 📌 Notes
+
+* Designed for research and academic evaluation
+* Real-world deployment requires calibration and validation
+* Performance depends on lighting and camera quality
+* Intended as a safety-support system, not a replacement for responsible driving
+
+---
+
+# ✅ Current Status
+
+* Real-time detection implemented
+* Experimental framework implemented
+* Metrics system implemented
+* CSV export implemented
+* GUI completed
+* Fusion logic completed
 
 ---
 

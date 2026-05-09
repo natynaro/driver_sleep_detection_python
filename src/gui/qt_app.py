@@ -22,19 +22,29 @@ from src.detection.face_mesh_detector import FaceMeshDetector
 from src.metrics.metrics_collector import MetricsCollector, FusedDriverState
 
 
+# =====================================
+# EXPERIMENT CONFIGURATION
+# =====================================
+EXPERIMENT_MODE = "FUSED"  
+# Options: "VISUAL_ONLY" or "FUSED"
+
+
+
 # ============================================================
 # CONFIGURATION PARAMETERS
 # ============================================================
 
-# Camera & processing
-MOBILE_RESOLUTION = (640, 480)
-FPS = 30.0
+# =====================================
+# CAMERA EXPERIMENT SETTINGS
+# =====================================
+CAMERA_RESOLUTION = (320, 240)   # Try also (320, 240)
+FPS = 20.0                       # Try also 20.0
 DT = 1.0 / FPS
 
 # Eye aspect ratio (EAR)
 EYE_OPEN_THRESHOLD = 0.75
 EYE_CLOSED_RATIO = 0.92
-MICROSLEEP_FRAMES = 8          # ~0.25s
+MICROSLEEP_FRAMES = 12        # ~0.4s
 
 # Facial cues
 YAWN_RATIO_THRESHOLD = 0.12
@@ -69,13 +79,18 @@ class DriverSleepApp(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Driver Sleep Detection – Visual Model")
+        self.setWindowTitle(f"Driver Sleep Detection – {EXPERIMENT_MODE} Mode")
         self.resize(950, 750)
 
         # --------------------------------------------------------
         # Camera and detector
         # --------------------------------------------------------
-        self.cam = Webcam(width=MOBILE_RESOLUTION[0], height=MOBILE_RESOLUTION[1])
+        
+        # self.cam = Webcam(width=MOBILE_RESOLUTION[0], height=MOBILE_RESOLUTION[1])
+        self.cam = Webcam(
+            width=CAMERA_RESOLUTION[0],
+            height=CAMERA_RESOLUTION[1]
+        )
         self.detector = FaceMeshDetector()
 
         # --------------------------------------------------------
@@ -140,6 +155,14 @@ class DriverSleepApp(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout()
+        self.config_label = QLabel(
+            f"Mode: {EXPERIMENT_MODE} | "
+            f"Resolution: {CAMERA_RESOLUTION[0]}x{CAMERA_RESOLUTION[1]} | "
+            f"FPS: {FPS}"
+        )
+        self.config_label.setStyleSheet("font-size:14px; color: gray;")
+        layout.addWidget(self.config_label)
+
 
         self.video_label = QLabel()
         self.video_label.setFrameShape(QFrame.Box)
@@ -275,9 +298,18 @@ class DriverSleepApp(QWidget):
         # Wearable data processing
         # -----------------------------------------------------
         current_time = time.time() - self.start_time
-        wearable_level = self._get_wearable_level(current_time)
-        wearable_drowsy = wearable_level > 0.6 if wearable_level is not None else False
+        
+        # wearable_level = self._get_wearable_level(current_time)
+        # wearable_drowsy = wearable_level > 0.6 if wearable_level is not None else False
 
+        wearable_level = None
+        wearable_drowsy = False
+
+        if EXPERIMENT_MODE == "FUSED":
+            wearable_level = self._get_wearable_level(current_time)
+            wearable_drowsy = wearable_level > 0.6 if wearable_level is not None else False
+            
+            
         # -----------------------------------------------------
         # STATE MACHINE (REALISTIC LOGIC)
         # -----------------------------------------------------
